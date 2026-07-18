@@ -141,3 +141,8 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# CareBridge local configuration and Prisma output
+backend/.env
+frontend/.env
+backend/prisma/migrations/
