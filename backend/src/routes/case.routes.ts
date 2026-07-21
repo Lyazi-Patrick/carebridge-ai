@@ -55,3 +55,169 @@ caseRouter.patch("/:caseId/ai-summary", ...patientOnly, async (req, res, next) =
 caseRouter.post("/:caseId/submit", ...patientOnly, async (req, res, next) => {
   try { const current = await ownedCase(String(req.params.caseId), req.auth!.userId); if (current.status !== "DRAFT") throw new AppError(409, "This case has already been submitted."); if (!current.documents.length) throw new AppError(400, "Upload at least one medical document before submitting."); const fundraisingCase = await prisma.fundraisingCase.update({ where: { id: current.id }, data: { status: "SUBMITTED" }, include: includeCase }); res.json({ case: fundraisingCase }); } catch (error) { next(error); }
 });
+/**
+ * Hospital: View submitted cases
+ */
+caseRouter.get(
+  "/hospital/pending",
+  requireAuth,
+  allowRoles("HOSPITAL"),
+  async (_req, res, next) => {
+    try {
+      const cases = await prisma.fundraisingCase.findMany({
+        where: {
+          status: "SUBMITTED",
+        },
+        include: {
+          patient: {
+            include: {
+              user: true,
+            },
+          },
+          documents: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      res.json({ cases });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * Hospital verifies a case
+ */
+caseRouter.patch(
+  "/hospital/:caseId/verify",
+  requireAuth,
+  allowRoles("HOSPITAL"),
+  async (req, res, next) => {
+    try {
+      const caseId = String(req.params.caseId);
+
+      const fundraisingCase =
+        await prisma.fundraisingCase.findUnique({
+          where: {
+            id: caseId,
+          },
+        });
+
+      if (!fundraisingCase) {
+        throw new AppError(
+          404,
+          "Fundraising case not found"
+        );
+      }
+
+      if (fundraisingCase.status !== "SUBMITTED") {
+        throw new AppError(
+          409,
+          "Only submitted cases can be verified"
+        );
+      }
+
+      const updatedCase =
+        await prisma.fundraisingCase.update({
+          where: {
+            id: caseId,
+          },
+          data: {
+            status: "HOSPITAL_VERIFIED",
+          },
+        });
+
+      res.json({
+        message: "Case verified successfully",
+        case: updatedCase,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * Hospital rejects a case
+ */
+caseRouter.patch(
+  "/hospital/:caseId/reject",
+  requireAuth,
+  allowRoles("HOSPITAL"),
+  async (req, res, next) => {
+    try {
+      const caseId = String(req.params.caseId);
+
+      const fundraisingCase =
+        await prisma.fundraisingCase.findUnique({
+          where: {
+            id: caseId,
+          },
+        });
+
+      if (!fundraisingCase) {
+        throw new AppError(
+          404,
+          "Fundraising case not found"
+        );
+      }
+
+      const updatedCase =
+        await prisma.fundraisingCase.update({
+          where: {
+            id: caseId,
+          },
+          data: {
+            status: "REJECTED",
+          },
+        });
+
+      res.json({
+        message: "Case rejected",
+        case: updatedCase,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * Public: Donors can view verified fundraising campaigns
+ */
+caseRouter.get(
+  "/public",
+  async (_req, res, next) => {
+    try {
+
+      const cases = await prisma.fundraisingCase.findMany({
+
+        where: {
+          status: "HOSPITAL_VERIFIED",
+        },
+
+        include: {
+          patient: {
+            include: {
+              user: true,
+            },
+          },
+          documents: true,
+        },
+
+        orderBy: {
+          createdAt: "desc",
+        },
+
+      });
+
+      res.json({ cases });
+
+    } catch (error) {
+      next(error);
+    }
+  }
+);
